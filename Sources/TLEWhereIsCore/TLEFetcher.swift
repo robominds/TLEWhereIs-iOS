@@ -108,10 +108,24 @@ public enum TLEFetcher {
         var request = URLRequest(url: celestrakURL(for: identifier))
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        let (data, _) = try await session.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let raw = String(data: data, encoding: .utf8) else {
             throw TLEFetchError.malformedResponse
         }
+        // TEMPORARY diagnostic: printed unconditionally while tracking down
+        // a report of Celestrak requests succeeding but returning content
+        // with zero parseable TLE lines on a physical device. Remove once
+        // root-caused.
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let headers = (response as? HTTPURLResponse)?.allHeaderFields ?? [:]
+        let snippet = String(raw.prefix(300))
+        print("""
+        [TLEFetcher] GET \(request.url?.absoluteString ?? "?")
+          status: \(status)
+          headers: \(headers)
+          body length: \(data.count) bytes
+          body snippet: \(snippet)
+        """)
         return raw
     }
 }
