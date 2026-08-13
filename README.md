@@ -9,7 +9,8 @@ the tracked satellite rises above an elevation angle you set.
 
 - **Tracking** — the currently tracked satellite's latitude/longitude/altitude/
   speed, plus its elevation and azimuth relative to your location, updated
-  live.
+  live; and a predicted time/azimuth/elevation for its next closest approach
+  (whether or not that approach clears the horizon).
 - **Search** — searches Celestrak by name or NORAD ID; tap a result to start
   tracking it.
 - **History** — satellites you've tracked before, most recent first; tap to
@@ -40,6 +41,12 @@ your threshold. Predictions are rescheduled whenever the tracked satellite,
 location, or threshold changes, on app foreground, and on a best-effort
 `BGAppRefreshTask`.
 
+Closest approach works the same way but isn't threshold-gated: `PassPredictor`
+scans up to 24h ahead for the next local minimum of range (a coarse pass to
+bracket it, then a finer pass to refine), and reports the time, azimuth, and
+elevation at that instant — which can be below the horizon if the satellite's
+orbit just doesn't bring it overhead this time around.
+
 ## Setup
 
 1. Install [XcodeGen](https://github.com/yonaskolb/XcodeGen) (the project file
@@ -66,14 +73,17 @@ swift test
 This was built in an environment with Xcode 26 available but not selected as
 the active toolchain. What's actually been verified:
 
-- `swift test` — **23/23 passing** (TLE parsing/disambiguation, SGP4
-  propagation sanity checks, pass-window detection, persistence round-trips).
-  This caught real bugs during development: a malformed TLE line crashing the
-  process instead of throwing (SatelliteKit's parser traps on out-of-range
-  input; now guarded before the call), SatelliteKit returning longitude in
-  `[0, 360)` instead of the conventional `[-180, 180]` (now normalized in
-  `Propagator`), and TLE parsing breaking on CRLF line endings with
-  interspersed blank lines (see below).
+- `swift test` — **28/28 passing** (TLE parsing/disambiguation, SGP4
+  propagation sanity checks, pass-window and closest-approach detection,
+  persistence round-trips). This caught real bugs during development: a
+  malformed TLE line crashing the process instead of throwing (SatelliteKit's
+  parser traps on out-of-range input; now guarded before the call), SatelliteKit
+  returning longitude in `[0, 360)` instead of the conventional `[-180, 180]`
+  (now normalized in `Propagator`), and TLE parsing breaking on CRLF line
+  endings with interspersed blank lines (see below). The closest-approach
+  tests include an end-to-end check against a real ISS TLE, confirming the
+  found time is a genuine local minimum of range (not just some sample) by
+  checking neighboring samples aren't closer.
 - `xcodebuild build` for the iOS Simulator — **succeeds**, including Swift 6
   strict concurrency checking (which caught and fixed two data-race errors in
   `LocationManager`/background-task scheduling).
@@ -94,6 +104,12 @@ the active toolchain. What's actually been verified:
   cached bad response would otherwise keep replaying) and send an explicit
   browser-style `User-Agent` (some CDNs/WAFs treat iOS's default `CFNetwork`
   UA as bot traffic). Confirmed working after the fix.
+- **Next Closest Approach**, on the iPhone 17 Simulator — seeded the app's
+  persisted state directly (JSON file in the app container) with ISS as the
+  tracked satellite and a San Francisco mock location, launched, and
+  confirmed the Tracking screen renders a real predicted time and elevation
+  for it (~88°, correctly near-overhead for that satellite/location pair at
+  that moment) alongside the existing live position fields.
 
 Not verified: History/Settings interaction flows (needs actual tapping —
 `simctl` can drive install/launch/screenshots but not UI gestures — that

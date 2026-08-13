@@ -12,6 +12,7 @@ final class AppModel {
     private(set) var state: AppState
     var currentPosition: SatellitePosition?
     var currentLookAngle: LookAngle?
+    var nextClosestApproach: (time: Date, lookAngle: LookAngle)?
     var errorMessage: String?
 
     private var propagator: Propagator?
@@ -65,6 +66,7 @@ final class AppModel {
             propagator = try Propagator(record: record)
             state = try store.trackSatellite(record)
             await refreshCurrentPosition()
+            await refreshClosestApproach()
             await refreshPassPredictions()
         } catch {
             errorMessage = Self.describe(error)
@@ -90,6 +92,7 @@ final class AppModel {
             errorMessage = "Using cached data — \(Self.describe(error))"
         }
         await refreshCurrentPosition()
+        await refreshClosestApproach()
         await refreshPassPredictions()
     }
 
@@ -113,7 +116,10 @@ final class AppModel {
 
     func updateSettings(_ transform: (inout Settings) -> Void) {
         state = (try? store.updateSettings(transform)) ?? state
-        Task { await refreshPassPredictions() }
+        Task {
+            await refreshClosestApproach()
+            await refreshPassPredictions()
+        }
     }
 
     private func refreshCurrentPosition() async {
@@ -125,9 +131,28 @@ final class AppModel {
         currentPosition = try? propagator.position()
         if let observer {
             currentLookAngle = try? propagator.lookAngle(from: observer)
+            // Covers the case where GPS wasn't ready yet when the satellite
+            // was first tracked: computed once as soon as a location shows
+            // up, rather than on every 5s tick.
+            if nextClosestApproach == nil {
+                await refreshClosestApproach()
+            }
         } else {
             currentLookAngle = nil
         }
+    }
+
+    /// Scans ahead (up to 24h) for the next point of minimum range — not
+    /// gated on being above the horizon, since a pass that never clears the
+    /// horizon still has a well-defined closest approach.
+    private func refreshClosestApproach() async {
+        guard let propagator, let observer else {
+            nextClosestApproach = nil
+            return
+        }
+        nextClosestApproach = try? PassPredictor.nextClosestApproach(
+            propagator: propagator, observer: observer, from: Date()
+        )
     }
 
     func refreshPassPredictions() async {

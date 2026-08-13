@@ -40,6 +40,28 @@ struct TrackingView: View {
                             }
                         }
 
+                        Section("Next Closest Approach") {
+                            if let approach = model.nextClosestApproach {
+                                LabeledContent("Time", value: approach.time.formatted(date: .omitted, time: .standard))
+                                LabeledContent("When", value: approach.time.formatted(.relative(presentation: .named)))
+                                LabeledContent("Elevation", value: degrees(approach.lookAngle.elevationDeg))
+                                LabeledContent("Azimuth", value: degrees(approach.lookAngle.azimuthDeg))
+                                LabeledContent("Range", value: kilometers(approach.lookAngle.rangeKm))
+                                if approach.lookAngle.elevationDeg < 0 {
+                                    Text("Below the horizon — won't be visible from here.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else {
+                                Text(
+                                    model.observer == nil
+                                        ? "Set your location in Settings to predict the next closest approach."
+                                        : "Computing…"
+                                )
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+
                         if let message = model.errorMessage {
                             Section {
                                 Label(message, systemImage: "exclamationmark.triangle.fill")
