@@ -92,12 +92,22 @@ public enum TLEFetcher {
         return try triplets.map { try makeRecord(name: $0.name ?? identifier, line1: $0.line1, line2: $0.line2) }
     }
 
+    // Some CDNs/WAFs in front of public-data APIs treat iOS's default
+    // CFNetwork User-Agent as bot/scraper traffic and return an empty (but
+    // 200 OK) body, while a browser UA passes through untouched -- observed
+    // on-device where Safari succeeded against the same URL but URLSession
+    // with no custom header came back with zero parseable TLE lines.
+    private static let userAgent =
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
+        "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+
     private static func fetchRaw(identifier: String, session: URLSession) async throws -> String {
         // TLEs go stale in days and Celestrak's NAME search result depends on
         // the exact query string, so a cached response -- especially a bad
         // or empty one from a transient failure -- must never be replayed.
         var request = URLRequest(url: celestrakURL(for: identifier))
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         let (data, _) = try await session.data(for: request)
         guard let raw = String(data: data, encoding: .utf8) else {
             throw TLEFetchError.malformedResponse
