@@ -11,7 +11,15 @@ struct SatelliteMapView: View {
         NavigationStack {
             Group {
                 if model.state.current != nil {
-                    Map(position: $cameraPosition, interactionModes: .all) {
+                    // Without explicit bounds, Map's default maximum zoom-out
+                    // distance stops well short of framing the whole globe.
+                    // 30,000 km comfortably fits the entire Earth in view;
+                    // 500m is a reasonable close-in limit.
+                    Map(
+                        position: $cameraPosition,
+                        bounds: MapCameraBounds(minimumDistance: 500, maximumDistance: 30_000_000),
+                        interactionModes: .all
+                    ) {
                         if let subsolar = model.subsolarPoint {
                             MapPolygon(coordinates: Self.nightPolygonCoordinates(subsolar: subsolar))
                                 .foregroundStyle(.black.opacity(0.28))
