@@ -11,7 +11,7 @@ struct SatelliteMapView: View {
         NavigationStack {
             Group {
                 if model.state.current != nil {
-                    Map(position: $cameraPosition) {
+                    Map(position: $cameraPosition, interactionModes: .all) {
                         if let subsolar = model.subsolarPoint {
                             MapPolygon(coordinates: Self.nightPolygonCoordinates(subsolar: subsolar))
                                 .foregroundStyle(.black.opacity(0.28))
