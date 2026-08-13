@@ -77,10 +77,26 @@ public enum TLEFetcher {
 
     /// Fetches and resolves the TLE for `identifier` from Celestrak.
     public static func fetch(identifier: String, session: URLSession = .shared) async throws -> TLERecord {
+        let raw = try await fetchRaw(identifier: identifier, session: session)
+        return try resolve(identifier: identifier, from: raw)
+    }
+
+    /// Fetches every satellite matching `identifier` from Celestrak without
+    /// resolving ambiguity, for presenting as a picker in a search UI
+    /// (unlike `fetch`, which is the single-result, disambiguation-required
+    /// entry point used by the CLI-style "track this satellite" flow).
+    public static func fetchCandidates(identifier: String, session: URLSession = .shared) async throws -> [TLERecord] {
+        let raw = try await fetchRaw(identifier: identifier, session: session)
+        let triplets = parseTriplets(raw)
+        guard !triplets.isEmpty else { throw TLEFetchError.noMatches(identifier: identifier) }
+        return try triplets.map { try makeRecord(name: $0.name ?? identifier, line1: $0.line1, line2: $0.line2) }
+    }
+
+    private static func fetchRaw(identifier: String, session: URLSession) async throws -> String {
         let (data, _) = try await session.data(from: celestrakURL(for: identifier))
         guard let raw = String(data: data, encoding: .utf8) else {
             throw TLEFetchError.malformedResponse
         }
-        return try resolve(identifier: identifier, from: raw)
+        return raw
     }
 }

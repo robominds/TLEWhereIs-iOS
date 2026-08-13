@@ -1,7 +1,7 @@
 import Foundation
 
 public struct Settings: Codable, Sendable, Equatable {
-    public enum LocationMode: String, Codable, Sendable {
+    public enum LocationMode: String, Codable, Sendable, Hashable {
         case gps
         case manual
     }

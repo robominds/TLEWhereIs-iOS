@@ -1,0 +1,45 @@
+name: TLEWhereIs
+options:
+  bundleIdPrefix: com.robominds
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  TLEWhereIsCore:
+    path: .
+targets:
+  TLEWhereIs:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: TLEWhereIsCore
+        product: TLEWhereIsCore
+    info:
+      path: Generated/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSLocationWhenInUseUsageDescription: >-
+          TLEWhereIs uses your location to show the tracked satellite's
+          elevation and azimuth relative to you, and to predict when it
+          will pass overhead.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.robominds.tlewhereis.refresh
+    entitlements:
+      path: Generated/TLEWhereIs.entitlements
+      properties: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.robominds.tlewhereis
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_STRICT_CONCURRENCY: complete
+schemes:
+  TLEWhereIs:
+    build:
+      targets:
+        TLEWhereIs: all
+    run:
+      config: Debug
