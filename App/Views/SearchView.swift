@@ -47,8 +47,30 @@ struct SearchView: View {
                 results = try await TLEFetcher.fetchCandidates(identifier: trimmed)
             } catch {
                 results = []
-                searchErrorMessage = "No matches for \"\(trimmed)\"."
+                searchErrorMessage = Self.describe(error, query: trimmed)
             }
+        }
+    }
+
+    private static func describe(_ error: Error, query: String) -> String {
+        switch error {
+        case TLEFetchError.noMatches:
+            return "No satellite found matching \"\(query)\"."
+        case TLEFetchError.malformedResponse:
+            return "Celestrak returned an unexpected response. Try again in a moment."
+        case let urlError as URLError:
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "No internet connection."
+            case .timedOut:
+                return "Search timed out — check your connection and try again."
+            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return "Could not reach Celestrak. Check your connection and try again."
+            default:
+                return "Search failed: \(urlError.localizedDescription)"
+            }
+        default:
+            return "Search failed: \(error.localizedDescription)"
         }
     }
 }
