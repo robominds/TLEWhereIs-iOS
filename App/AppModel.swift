@@ -13,10 +13,13 @@ final class AppModel {
     var currentPosition: SatellitePosition?
     var currentLookAngle: LookAngle?
     var nextClosestApproach: (time: Date, lookAngle: LookAngle)?
+    var groundTrack: [GroundTrackPoint] = []
+    var subsolarPoint: SubsolarPoint?
     var errorMessage: String?
 
     private var propagator: Propagator?
     private var refreshTask: Task<Void, Never>?
+    private var mapRefreshTask: Task<Void, Never>?
 
     init(
         store: Store = Store(),
@@ -50,10 +53,20 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(5))
             }
         }
+        // Ground track/subsolar point barely change second to second, so
+        // this refreshes far less often than the live position above.
+        mapRefreshTask?.cancel()
+        mapRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshMapData()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
     }
 
     func onDisappear() {
         refreshTask?.cancel()
+        mapRefreshTask?.cancel()
     }
 
     /// Fetches and starts tracking the satellite matching `identifier`
@@ -67,6 +80,7 @@ final class AppModel {
             state = try store.trackSatellite(record)
             await refreshCurrentPosition()
             await refreshClosestApproach()
+            await refreshMapData()
             await refreshPassPredictions()
         } catch {
             errorMessage = Self.describe(error)
@@ -93,6 +107,7 @@ final class AppModel {
         }
         await refreshCurrentPosition()
         await refreshClosestApproach()
+        await refreshMapData()
         await refreshPassPredictions()
     }
 
@@ -153,6 +168,20 @@ final class AppModel {
         nextClosestApproach = try? PassPredictor.nextClosestApproach(
             propagator: propagator, observer: observer, from: Date()
         )
+    }
+
+    /// Ground track spans 90 minutes behind and ahead of now — comfortably
+    /// more than one LEO orbital period in each direction — plus the
+    /// current subsolar point, for drawing the day/night terminator.
+    private func refreshMapData() async {
+        subsolarPoint = SolarPosition.subsolarPoint()
+        guard let propagator else {
+            groundTrack = []
+            return
+        }
+        groundTrack = (try? propagator.groundTrack(
+            from: Date().addingTimeInterval(-90 * 60), duration: 180 * 60, stepSeconds: 60
+        )) ?? []
     }
 
     func refreshPassPredictions() async {

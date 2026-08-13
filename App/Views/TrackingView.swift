@@ -78,8 +78,6 @@ struct TrackingView: View {
                 }
             }
             .navigationTitle("TLEWhereIs")
-            .onAppear { model.onAppear() }
-            .onDisappear { model.onDisappear() }
         }
     }
 

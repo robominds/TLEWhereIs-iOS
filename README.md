@@ -11,6 +11,8 @@ the tracked satellite rises above an elevation angle you set.
   speed, plus its elevation and azimuth relative to your location, updated
   live; and a predicted time/azimuth/elevation for its next closest approach
   (whether or not that approach clears the horizon).
+- **Map** — the satellite's ground track (90 minutes behind and ahead of now),
+  your location, and a day/night terminator overlay, on a MapKit map.
 - **Search** — searches Celestrak by name or NORAD ID; tap a result to start
   tracking it.
 - **History** — satellites you've tracked before, most recent first; tap to
@@ -47,6 +49,15 @@ bracket it, then a finer pass to refine), and reports the time, azimuth, and
 elevation at that instant — which can be below the horizon if the satellite's
 orbit just doesn't bring it overhead this time around.
 
+The map's day/night terminator is computed in `SolarPosition` (low-precision
+sun position — the standard textbook approximation, plenty for a visual
+overlay). The terminator is the great circle 90° from the subsolar point in
+every direction, so it's drawn as a single polygon spanning the full
+longitude range, closed at whichever pole is currently in darkness. The
+ground track and the app's periodic live-data refresh both run from a single
+lifecycle hook on `ContentView` (the `TabView` container itself, not any one
+tab) — see "Verified vs. not" below for why that matters.
+
 ## Setup
 
 1. Install [XcodeGen](https://github.com/yonaskolb/XcodeGen) (the project file
@@ -73,17 +84,21 @@ swift test
 This was built in an environment with Xcode 26 available but not selected as
 the active toolchain. What's actually been verified:
 
-- `swift test` — **28/28 passing** (TLE parsing/disambiguation, SGP4
+- `swift test` — **36/36 passing** (TLE parsing/disambiguation, SGP4
   propagation sanity checks, pass-window and closest-approach detection,
-  persistence round-trips). This caught real bugs during development: a
-  malformed TLE line crashing the process instead of throwing (SatelliteKit's
-  parser traps on out-of-range input; now guarded before the call), SatelliteKit
-  returning longitude in `[0, 360)` instead of the conventional `[-180, 180]`
-  (now normalized in `Propagator`), and TLE parsing breaking on CRLF line
-  endings with interspersed blank lines (see below). The closest-approach
-  tests include an end-to-end check against a real ISS TLE, confirming the
-  found time is a genuine local minimum of range (not just some sample) by
-  checking neighboring samples aren't closer.
+  ground-track sampling, solar-position math, persistence round-trips). This
+  caught real bugs during development: a malformed TLE line crashing the
+  process instead of throwing (SatelliteKit's parser traps on out-of-range
+  input; now guarded before the call), SatelliteKit returning longitude in
+  `[0, 360)` instead of the conventional `[-180, 180]` (now normalized in
+  `Propagator`), and TLE parsing breaking on CRLF line endings with
+  interspersed blank lines (see below). The closest-approach tests include an
+  end-to-end check against a real ISS TLE, confirming the found time is a
+  genuine local minimum of range (not just some sample) by checking
+  neighboring samples aren't closer. The solar-position tests check real
+  equinox/solstice dates and, for the terminator, a date-independent
+  geometric property (every terminator point is exactly 90° of great-circle
+  distance from the subsolar point) rather than a hardcoded reference value.
 - `xcodebuild build` for the iOS Simulator — **succeeds**, including Swift 6
   strict concurrency checking (which caught and fixed two data-race errors in
   `LocationManager`/background-task scheduling).
@@ -110,6 +125,18 @@ the active toolchain. What's actually been verified:
   confirmed the Tracking screen renders a real predicted time and elevation
   for it (~88°, correctly near-overhead for that satellite/location pair at
   that moment) alongside the existing live position fields.
+- **Map**, on the iPhone 17 Simulator — same seeded state, screenshotted the
+  Map tab and confirmed the ground track, "You" pin, satellite marker, and
+  night-side shading all render and land in sensible places. This caught a
+  real bug: the periodic refresh loop (`AppModel.onAppear`) was wired to
+  `TrackingView`'s `onAppear`, so a session that opened straight to the Map
+  tab and never visited Tracking would never start it — MapKit's own
+  default "zoom to my location" camera was the only thing that ever
+  rendered (confirmed by screenshot: a street-level San Francisco
+  intersection with no satellite data at all). Moved the lifecycle hook to
+  `ContentView` (the `TabView` container, always present regardless of
+  selected tab) and re-verified both tabs populate correctly on a fresh
+  launch.
 
 Not verified: History/Settings interaction flows (needs actual tapping —
 `simctl` can drive install/launch/screenshots but not UI gestures — that

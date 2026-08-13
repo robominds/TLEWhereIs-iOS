@@ -77,4 +77,27 @@ public struct Propagator {
             throw PropagationError.propagationFailed
         }
     }
+
+    /// Samples the ground track across `[start, start+duration)` at
+    /// `stepSeconds` resolution, for drawing on a map.
+    public func groundTrack(from start: Date, duration: TimeInterval, stepSeconds: TimeInterval) throws -> [GroundTrackPoint] {
+        var points: [GroundTrackPoint] = []
+        let end = start.addingTimeInterval(duration)
+        var t = start
+        while t <= end {
+            points.append(GroundTrackPoint(time: t, position: try position(at: t)))
+            t = t.addingTimeInterval(stepSeconds)
+        }
+        return points
+    }
+}
+
+public struct GroundTrackPoint: Sendable, Equatable {
+    public let time: Date
+    public let position: SatellitePosition
+
+    public init(time: Date, position: SatellitePosition) {
+        self.time = time
+        self.position = position
+    }
 }

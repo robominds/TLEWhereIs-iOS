@@ -53,4 +53,22 @@ final class PropagationTests: XCTestCase {
         let badRecord = TLERecord(name: "BAD", noradID: 1, line1: "not a tle", line2: "not a tle")
         XCTAssertThrowsError(try Propagator(record: badRecord))
     }
+
+    func testGroundTrackSpansTheRequestedWindowInOrder() throws {
+        let propagator = try Propagator(record: Self.issRecord)
+        let start = Date()
+        let track = try propagator.groundTrack(from: start, duration: 5400, stepSeconds: 60)
+
+        XCTAssertEqual(track.count, 91) // 0, 60, ..., 5400 inclusive
+        XCTAssertEqual(track.first?.time, start)
+        XCTAssertEqual(track.last?.time, start.addingTimeInterval(5400))
+        for point in track {
+            XCTAssertGreaterThanOrEqual(point.position.longitudeDeg, -180)
+            XCTAssertLessThanOrEqual(point.position.longitudeDeg, 180)
+        }
+        // Strictly increasing timestamps.
+        for (a, b) in zip(track, track.dropFirst()) {
+            XCTAssertLessThan(a.time, b.time)
+        }
+    }
 }
