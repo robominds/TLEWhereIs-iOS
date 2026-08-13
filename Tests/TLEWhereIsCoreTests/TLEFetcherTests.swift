@@ -30,6 +30,20 @@ final class TLEFetcherTests: XCTestCase {
         XCTAssertTrue(triplets[0].line2.hasPrefix("2 64537"))
     }
 
+    func testParseTripletsSurvivesCRLFAndInterspersedBlankLines() {
+        // Reproduces a real device response: CRLF line endings, and a blank
+        // line inserted after every real line (observed with a carrier's
+        // transparent compression proxy re-encoding the gzip response).
+        let raw = "OTTER PUP 2             \r\n\r\n"
+            + "1 64537U 25151A   26224.50000000  .00001234  00000-0  12345-4 0  9991\r\n\r\n"
+            + "2 64537  97.5000 123.4567 0001234  90.0000 270.0000 15.20000000 12345\r\n\r\n"
+        let triplets = TLEFetcher.parseTriplets(raw)
+        XCTAssertEqual(triplets.count, 1)
+        XCTAssertEqual(triplets[0].name, "OTTER PUP 2")
+        XCTAssertTrue(triplets[0].line1.hasPrefix("1 64537"))
+        XCTAssertTrue(triplets[0].line2.hasPrefix("2 64537"))
+    }
+
     func testParseTripletsHandlesMultipleSatellites() {
         let raw = """
         UME (ISS)
