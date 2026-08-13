@@ -93,7 +93,12 @@ public enum TLEFetcher {
     }
 
     private static func fetchRaw(identifier: String, session: URLSession) async throws -> String {
-        let (data, _) = try await session.data(from: celestrakURL(for: identifier))
+        // TLEs go stale in days and Celestrak's NAME search result depends on
+        // the exact query string, so a cached response -- especially a bad
+        // or empty one from a transient failure -- must never be replayed.
+        var request = URLRequest(url: celestrakURL(for: identifier))
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        let (data, _) = try await session.data(for: request)
         guard let raw = String(data: data, encoding: .utf8) else {
             throw TLEFetchError.malformedResponse
         }
