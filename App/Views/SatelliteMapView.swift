@@ -11,13 +11,12 @@ struct SatelliteMapView: View {
         NavigationStack {
             Group {
                 if model.state.current != nil {
-                    // Without explicit bounds, Map's default maximum zoom-out
-                    // distance stops well short of framing the whole globe.
-                    // 30,000 km comfortably fits the entire Earth in view;
-                    // 500m is a reasonable close-in limit.
+                    // 100,000 km is comfortably past what's needed to frame
+                    // the whole Earth (Apple's own default caps out well
+                    // short of that); 500m is a reasonable close-in limit.
                     Map(
                         position: $cameraPosition,
-                        bounds: MapCameraBounds(minimumDistance: 500, maximumDistance: 30_000_000),
+                        bounds: MapCameraBounds(minimumDistance: 500, maximumDistance: 100_000_000),
                         interactionModes: .all
                     ) {
                         if let subsolar = model.subsolarPoint {
@@ -53,7 +52,12 @@ struct SatelliteMapView: View {
                             }
                         }
                     }
-                    .mapStyle(.standard(elevation: .flat))
+                    // .standard style has its own zoom-out ceiling regardless
+                    // of mapCameraBounds; .hybrid + realistic elevation is
+                    // what actually lets MapKit pull back to a full 3D globe
+                    // view (satellite imagery, city lights, stars) rather
+                    // than getting stuck at a continental-scale view.
+                    .mapStyle(.hybrid(elevation: .realistic))
                     .onChange(of: model.currentPosition) { _, newValue in
                         guard !hasCenteredCamera, let newValue else { return }
                         hasCenteredCamera = true

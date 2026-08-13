@@ -12,7 +12,9 @@ the tracked satellite rises above an elevation angle you set.
   live; and a predicted time/azimuth/elevation for its next closest approach
   (whether or not that approach clears the horizon).
 - **Map** — the satellite's ground track (90 minutes behind and ahead of now),
-  your location, and a day/night terminator overlay, on a MapKit map.
+  your location, and a day/night terminator overlay, on a MapKit map. Fully
+  interactive (pinch/pan/rotate) and zooms all the way out to a 3D globe
+  view — satellite imagery, city lights, stars — not just a flat regional map.
 - **Search** — searches Celestrak by name or NORAD ID; tap a result to start
   tracking it.
 - **History** — satellites you've tracked before, most recent first; tap to
@@ -57,6 +59,11 @@ longitude range, closed at whichever pole is currently in darkness. The
 ground track and the app's periodic live-data refresh both run from a single
 lifecycle hook on `ContentView` (the `TabView` container itself, not any one
 tab) — see "Verified vs. not" below for why that matters.
+
+The map uses `.hybrid(elevation: .realistic)` specifically because
+`.standard` style has its own zoom-out ceiling that no amount of
+`MapCameraBounds` tuning gets past — only `.hybrid`/`.imagery` with realistic
+elevation lets MapKit pull back to the full 3D globe.
 
 ## Setup
 
@@ -137,6 +144,23 @@ the active toolchain. What's actually been verified:
   `ContentView` (the `TabView` container, always present regardless of
   selected tab) and re-verified both tabs populate correctly on a fresh
   launch.
+- **Map zoom range** — a user report of "can't pinch out far enough to see
+  the whole map" took three attempts to actually fix, verified each time by
+  screenshotting a simulator run rather than trusting the change: (1) made
+  `interactionModes`/`bounds` explicit on `Map` rather than relying on
+  whatever this SDK's default happened to be; (2) raised
+  `MapCameraBounds.maximumDistance`, which turned out not to be the binding
+  constraint; (3) the actual fix — `.standard` map style has its own
+  zoom-out ceiling regardless of bounds, and only `.hybrid`/`.imagery` with
+  `elevation: .realistic` lets the camera reach a full 3D globe view.
+  Confirmed by forcing the camera to an extreme test distance and
+  screenshotting the result before and after the style change — visibly
+  stuck at a continental view with `.standard`, correctly showing the whole
+  Earth from space with `.hybrid`. That same testing pass also surfaced a
+  separate issue: reinstalling over an existing app container restored the
+  previously-selected tab regardless of source order, silently masking
+  which tab was actually being screenshotted, fixed by giving `TabView` an
+  explicit `selection` binding instead of relying on view order alone.
 
 Not verified: History/Settings interaction flows (needs actual tapping —
 `simctl` can drive install/launch/screenshots but not UI gestures — that
@@ -152,7 +176,6 @@ this for a specific observation.
 - Pass predictions are sampled at 30-second resolution, not sub-second —
   fine for "get a heads-up a pass is starting," not for precise antenna
   pointing.
-- No map/globe visualization.
 
 ## Acknowledgments
 
