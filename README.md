@@ -64,29 +64,43 @@ swift test
 ## Verified vs. not
 
 This was built in an environment with Xcode 26 available but not selected as
-the active toolchain. What's actually been verified here:
+the active toolchain. What's actually been verified:
 
-- `swift test` — **22/22 passing** (TLE parsing/disambiguation, SGP4
+- `swift test` — **23/23 passing** (TLE parsing/disambiguation, SGP4
   propagation sanity checks, pass-window detection, persistence round-trips).
-  This caught two real SatelliteKit-integration bugs during development: a
-  malformed TLE line crashing the process instead of throwing (SatelliteKit's
-  parser traps on out-of-range input; now guarded before the call), and
-  SatelliteKit returning longitude in `[0, 360)` instead of the conventional
-  `[-180, 180]` (now normalized in `Propagator`).
+  This caught real bugs during development: a malformed TLE line crashing the
+  process instead of throwing (SatelliteKit's parser traps on out-of-range
+  input; now guarded before the call), SatelliteKit returning longitude in
+  `[0, 360)` instead of the conventional `[-180, 180]` (now normalized in
+  `Propagator`), and TLE parsing breaking on CRLF line endings with
+  interspersed blank lines (see below).
 - `xcodebuild build` for the iOS Simulator — **succeeds**, including Swift 6
   strict concurrency checking (which caught and fixed two data-race errors in
   `LocationManager`/background-task scheduling).
 - Installed and launched on an iPhone 17 Simulator — **launches without
   crashing**; the tab bar, navigation title, and the CoreLocation permission
   prompt (with its custom usage-description text) all render correctly.
+- **Search, on a physical iPhone** — initially failed with "no satellite
+  found" for every query, including a plain NORAD ID. Root-caused via
+  on-device console logging to a Celestrak response with CRLF endings and a
+  blank line inserted after every real line — most likely a carrier or WiFi
+  transparent compression proxy re-encoding the gzip response in transit,
+  since `curl` against the identical URL (with or without requesting gzip)
+  came back clean. `TLEFetcher`'s line-pairing logic only tolerated `"\n"`
+  and plain-whitespace trimming, so a stray `"\r"` silently broke it down to
+  zero results regardless of query. Fixed by splitting on any newline
+  character and dropping blank lines before pairing; also hardened along the
+  way: requests now bypass HTTP caching (TLE data is time-sensitive, and a
+  cached bad response would otherwise keep replaying) and send an explicit
+  browser-style `User-Agent` (some CDNs/WAFs treat iOS's default `CFNetwork`
+  UA as bot traffic). Confirmed working after the fix.
 
-Not verified: the Search/History/Settings interaction flows (needs actual
-tapping — `simctl` can drive install/launch/screenshots but not UI
-gestures — that requires an XCUITest target, which isn't included here) and
-real on-device push/notification delivery. Try the golden path — search for a
-satellite, track it, set a low elevation threshold, and see whether a
-notification fires on a real pass — before relying on this for a specific
-observation.
+Not verified: History/Settings interaction flows (needs actual tapping —
+`simctl` can drive install/launch/screenshots but not UI gestures — that
+requires an XCUITest target, which isn't included here) and real on-device
+notification delivery for a predicted pass. Set a low elevation threshold and
+see whether a notification actually fires on a real pass before relying on
+this for a specific observation.
 
 ## Known limitations
 
